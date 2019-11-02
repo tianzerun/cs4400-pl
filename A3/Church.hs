@@ -3,7 +3,7 @@ Module      :  Church
 Description :  Church encodings of booleans and natural numbers. 
                Fixpoint operator.
 
-Maintainer  :  Your Name <your email>
+Maintainer  :  Zerun Tian <tian.ze@husky.neu.edu>
 -}
 
 
@@ -101,24 +101,33 @@ tests = do
   test "toChurchBool False -> fromChurchBool"
        (fromChurchBool (toChurchBool False))
        (Just False)
-  test "toNumeral 10 -> fromNumeral"
-       (fromNumeral (toNumeral 10)) 
-       (Just 10)
   test "toNumeral 0 -> fromNumeral"
        (fromNumeral (toNumeral 0))
        (Just 0)
+  test "toNumeral 1 -> fromNumeral"
+       (fromNumeral (toNumeral 1))
+       (Just 1)
+  test "toNumeral 2 -> fromNumeral"
+       (fromNumeral (toNumeral 2))
+       (Just 2)
+  test "toNumeral 10 -> fromNumeral"
+       (fromNumeral (toNumeral 10))
+       (Just 10)
   test "plus 0 0 --> 0"
        (fromNumeral (normalize (App (App cplus (toNumeral 0)) (toNumeral 0))))
        (Just (0 + 0))
   test "plus 3 5 --> 8"
        (fromNumeral (normalize (App (App cplus (toNumeral 3)) (toNumeral 5))))
        (Just (3 + 5))
-  test "mins 6 6 --> 0"
+  test "minus 6 6 --> 0"
        (fromNumeral (normalize (App (App cminus (toNumeral 5)) (toNumeral 6))))
        (Just (6 - 6))
-  test "mins 5 3 --> 2"
+  test "minus 5 3 --> 2"
        (fromNumeral (normalize (App (App cminus (toNumeral 5)) (toNumeral 3))))
        (Just (5 - 3))
+  test "minus 3 4 --> 0"
+       (fromNumeral (normalize (App (App cminus (toNumeral 3)) (toNumeral 4))))
+       (Just 0)
   test "times 2 0 --> 0"
        (fromNumeral (normalize (App (App ctimes (toNumeral 2)) (toNumeral 0))))
        (Just (2 * 0))
@@ -203,7 +212,9 @@ tests = do
   test "expn 3 0 -> 1"
        (fromNumeral (normalize (App (App expn (toNumeral 3)) (toNumeral 0))))
        (Just (3 ^ 0))
-
+  test "expn 3 3 -> 27"
+       (fromNumeral (normalize (App (App expn (toNumeral 3)) (toNumeral 3))))
+       (Just (3 ^ 3))
 
 ---------------------------- your helper functions --------------------------
 toNumeralHelper :: Integer -> Lambda

@@ -64,7 +64,7 @@ translate (Call f args) = callHelper f args
 factorialOf :: Integer -> ABLFExpr
 factorialOf n = (LetFun "f"
                         ["n"]
-                        (IfThen (Eq (AVar "n") (Num 1))
+                        (IfThen (Leq (AVar "n") (Num 1))
                                 (Num 1)
                                 (Mul (AVar "n") (Call "f" [(Sub (AVar "n") (Num 1))])))
                         (Call "f" [(Num n)]))
@@ -172,6 +172,10 @@ tests = do
   test "translate (Let x True (And True False))"
        (fromChurchBool (normalize (translate (Let "x" (Bool True) (And (AVar "x") (Bool False))))))
        (Just (let x = True in (x && False)))
+  test "translate (LetFun f [] (Add 0 1) (Sub (Call f []) 1)"
+       (fromNumeral (normalize (translate (LetFun "f" [] (Add (Num 0) (Num 1))
+                                                  (Sub (Call "f" []) (Num 1))))))
+       (Just (let f = (0 + 1) in (f - 1)))
   test "translate (LetFun f [a] (Add a 2) (f 1)"
        (fromNumeral (normalize (translate (LetFun "f" ["a"] (Add (AVar "a") (Num 2))
                                                   (Call "f" [(Num 1)])))))
@@ -197,7 +201,18 @@ tests = do
   test "translate (Exp (Num 2) (Num 5))"
        (fromNumeral (normalize (translate (Exp (Num 2) (Num 5)))))
        (Just (2 ^ 5))
-
+  test "factorialOf 0"
+       (fromNumeral (normalize (translate (factorialOf 0))))
+       (Just 1)
+  test "factorialOf 1"
+       (fromNumeral (normalize (translate (factorialOf 1))))
+       (Just 1)
+  test "factorialOf 2"
+       (fromNumeral (normalize (translate (factorialOf 2))))
+       (Just 2)
+  test "factorialOf 3"
+       (fromNumeral (normalize (translate (factorialOf 3))))
+       (Just 6)
 
 ---------------------------- your helper functions --------------------------
 curryVars :: [Variable] -> ABLFExpr -> Lambda
