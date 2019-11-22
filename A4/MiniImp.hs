@@ -126,11 +126,12 @@ execStmt (Print e, sto, i) =
   do v <- evalExpr sto e
      return (sto, i, [v])
 execStmt (DoWhile b c, sto, i) =
-  do (sto', i', out) <- execStmt (b, sto, i)
+  do (sto', i', out1) <- execStmt (b, sto, i)
      (Bool c') <- evalExpr sto' c
      if c'
-        then execStmt (DoWhile b c, sto', i')
-        else return (sto', i', out)
+        then do (sto'', i'', out2) <- execStmt (DoWhile b c, sto', i')
+                return (sto'', i'', out1 ++ out2)
+        else return (sto', i', out1)
 execStmt (For x s e body, sto, i) = -- For Variable Expr Expr Stmt
   do (Num start) <- evalExpr sto s
      (Num end) <- evalExpr sto e
@@ -218,51 +219,120 @@ execToOutWithIn s i = selectOut (execStmt (cfgWithIn s i))
 execToOut :: Stmt -> Maybe Out
 execToOut s = execToOutWithIn s []
 
+testEnv1 :: Store Value
+testEnv1 = (fromList [("x", (Array [(Num 2), (Num 3)])), ("a", Num 0)])
+
 tests :: IO ()
 tests = do
-  -- example tests - add more
+  -- tests for evalExpr
+  -- | Get
+  test "x[0] from empty env"
+       (evalExpr empty (Get "x" (num 0)))
+       Nothing
+  test "x = [2, 3] x[-1]"
+       (evalExpr testEnv1 (Get "x" (num (-1))))
+       Nothing
   test "x = [2, 3] x[0]"
-       (evalExpr (fromList [("x", (Array [(Num 2), (Num 3)]))]) (Get "x" (num 0)))
+       (evalExpr testEnv1 (Get "x" (num 0)))
        (Just (Num 2))
   test "x = [2, 3] x[1]"
-       (evalExpr (fromList [("x", (Array [(Num 2), (Num 3)]))]) (Get "x" (num 1)))
+       (evalExpr testEnv1 (Get "x" (num 1)))
        (Just (Num 3))
   test "x = [2, 3] x[2]"
-       (evalExpr (fromList [("x", (Array [(Num 2), (Num 3)]))]) (Get "x" (num 2)))
+       (evalExpr testEnv1 (Get "x" (num 2)))
        Nothing
-  test "assign x = 1, print x"
+  -- tests for execStmt
+  -- | Assign, Seq, While, If, and Print
+  test "assign x = 1 `seq` print x"
        (execToOut (Seq (Assign "x" (num 1)) (Print (Var "x"))))
+       (Just [Num 1])
+  test "assign x = true `seq` print x"
+       (execToOut (Seq (Assign "x" (bool True)) (Print (Var "x"))))
+       (Just [Bool True])
+  test "assign x = [1] `seq` print x"
+       (execToOut (Assign "x" (Val (Array [Num 1])) `Seq` (Print (Var "x"))))
+       (Just [Array [Num 1]])
+  test "assign x = True `seq` assign x = False `seq` print x"
+       (execToOut ((Assign "x" (bool True)) `Seq` (Assign "x" (bool False)) `Seq` (Print (Var "x"))))
+       (Just [Bool False])
+  test "env={x:0}, assign x = 1 `seq` print x"
+       (selectOut (execStmt (Assign "x" (num 1) `Seq` (Print (Var "x")), fromList [("x", (Num 0))], [])))
        (Just [Num 1])
   test "print 10"
        (execStmt (Print (Val (Num 10)), empty, [])) 
        (Just (empty, [], [Num 10]))
+  test "env=empty, assign x = x + 1"
+       (execToOut ((Assign "x" (Add (Var "x") (num 1)))))
+       Nothing
   test "store = {x: [2, 3]} print x[1] print x[0]"
-       (selectOut (execStmt ((Print (Get "x" (num 1))) `Seq` (Print (Get "x" (num 0))), (fromList [("x", (Array [(Num 2), (Num 3)]))]), [])))
+       (selectOut (execStmt ((Print (Get "x" (num 1))) `Seq` (Print (Get "x" (num 0))), testEnv1, [])))
        (Just [Num 3, Num 2])
+  test "store = {x: [2, 3]} print x[0] print x[0]"
+       (selectOut (execStmt ((Print (Get "x" (num 0))) `Seq` (Print (Get "x" (num 0))), testEnv1, [])))
+       (Just [Num 2, Num 2])
   test "if true then print 1 else print 2"
        (execToOut (If (bool True) (Print (num 1)) (Print (num 2))))
        (Just [Num 1])
   test "if (True && False) then print 1 else print 2"
        (execToOut (If (And (bool True) (bool False)) (Print (num 1)) (Print (num 2))))
        (Just [Num 2])
-  test "while false { prit 12 }"
+  test "while false { print 12 }"
        (execToOut (While (bool False) (Print (num 12))))
        (Just [])
+  test "env=testEnv1, while a <= 2 { a += 1 `seq` print a }"
+       (selectOut (execStmt (While (Le (Var "a") (num 2))
+                                   ((Assign "a" (Add (Var "a") (num 1))) `Seq`
+                                    (Print (Var "a"))),
+                             testEnv1, [])))
+       (Just [Num 1, Num 2, Num 3])
+  -- | DoWhile
+  test "env=empty, do { print x } while false"
+       (execToOut (DoWhile (Print (Var "x")) (bool False)))
+       Nothing
   test "do { print 12 } while false"
        (execToOut (DoWhile (Print (num 12)) (bool False)))
        (Just [Num 12])
+  test "env=testEnv1, do { a += 1 `seq` print a } while a <= 2"
+       (selectOut (execStmt (DoWhile ((Assign "a" (Add (Var "a") (num 1))) `Seq`
+                                      (Print (Var "a")))
+                                     (Le (Var "a") (num 2)),
+                             testEnv1, [])))
+       (Just [Num 1, Num 2, Num 3])
+  -- | For
+  test "for x = 1 to 1 print x"
+       (execToOut (For "x" (num 1) (num 1) (Print (Var "x"))))
+       (Just [Num 1])
+  test "for x = 2 to 1 print x"
+       (execToOut (For "x" (num 2) (num 1) (Print (Var "x"))))
+       (Just [])
   test "for x = 1 to 5 { print x }"
        (execToOut (For "x" (num 1) (num 5) (Print (Var "x"))))
        (Just [Num 1, Num 2, Num 3, Num 4, Num 5])
-  test "read then print 42"
+  test "for x = 0 to 2 { read in `seq` print (x * in) }"
+       (execToOutWithIn (For "x" (num 0) (num 2) ((Read "in") `Seq` (Print (Mul (Var "x") (Var "in"))))) [1, 2, 3])
+       (Just [Num 0, Num 2, Num 6])
+  test "for i = 0 to 1 { print x[i] }"
+       (selectOut (execStmt (For "i" (num 0) (num 1) (Print (Get "x" (Var "i"))),
+                             testEnv1, [])))
+       (Just [Num 2, Num 3])
+  test "for i = 0 to 2 { print x[i] }" -- 2 is index out of bound
+       (selectOut (execStmt (For "i" (num 0) (num 2) (Print (Get "x" (Var "i"))),
+                             testEnv1, [])))
+       Nothing
+  -- | Read
+  test "read x"
+       (execToOutWithIn (Read "x") [])
+       Nothing
+  test "read x `seq` print x"
        (execToOutWithIn (Seq (Read "x") (Print (Var "x"))) [42])
        (Just [Num 42])
-  test "read then print 1 2"
+  test "read x `seq` read y `seq` print x `seq` print y"
        (execToOutWithIn ((Read "x") `Seq` (Read "y") `Seq` (Print (Var "x")) `Seq` (Print (Var "y"))) [1, 2])
        (Just [Num 1, Num 2])
-  test "read two times then print the lastest print 2"
+  test "read x `seq` read x print x"
        (execToOutWithIn ((Read "x") `Seq` (Read "x") `Seq` (Print (Var "x"))) [1, 2])
        (Just [Num 2])
+  -- | NewArray, Set, Get, and ForEach
   test "Array with 5 elements"
        (execToOut (NewArray "array" (num 5) (num 5) `Seq`
                    Set "array" (num 2) (num 42) `Seq`
@@ -284,3 +354,41 @@ tests = do
                    ForEach "x" "array" (Print (Var "x")) `Seq`
                    Print (Var "array")))
        (Just [Num 0, Num 0, Num 0, Num 0, Array [Num 0, Num 0, Num 0, Num 0]])
+  -- | exercise 6
+  test "exercise 6 where in = [1, 2, 3, 4, 5, 2]"
+       (execToOutWithIn exercise6 [1, 2, 3, 4, 5, 2])
+       (Just [Num 2, Num 4, Num 6, Num 8, Num 10])
+  test "exercise 6 where in = [1, 2, 3, 4, 5, 0]"
+       (execToOutWithIn exercise6 [1, 2, 3, 4, 5, 0])
+       (Just [Num 0, Num 0, Num 0, Num 0, Num 0])
+  test "exercise 6 where in = [1, 0, 1, 0, 1, 5]"
+       (execToOutWithIn exercise6 [1, 0, 1, 0, 1, 5])
+       (Just [Num 5, Num 0, Num 5, Num 0, Num 5])
+  test "exercise 6 where in = [1, 0, 1, 0, 1, -5]"
+       (execToOutWithIn exercise6 [1, 0, 1, 0, 1, (-5)])
+       (Just [Num (-5), Num 0, Num (-5), Num 0, Num (-5)])
+  test "exercise 6 where in = [1, 0, 1, 0, 1, -5, 2]" -- test extra input stream values
+       (execToOutWithIn exercise6 [1, 0, 1, 0, 1, (-5), 2])
+       (Just [Num (-5), Num 0, Num (-5), Num 0, Num (-5)])
+  test "exercise 6 where in = [1, 2, 3, 4, 5]" -- test not enough input stream values
+       (execToOutWithIn exercise6 [1, 2, 3, 4, 5])
+       Nothing
+  -- | exercise 7
+  test "exercise 7 where in = [1, 2, 3, 4, 5, 0]"
+       (execToOutWithIn exercise7 [1, 2, 3, 4, 5, 0])
+       (Just [Num 1, Num 3, Num 6, Num 10, Num 15])
+  test "exercise 7 where in = [1, 2, 3, 4, 5, -1]"
+       (execToOutWithIn exercise7 [1, 2, 3, 4, 5, -1])
+       (Just [Num 1, Num 3, Num 6, Num 10, Num 15])
+  test "exercise 7 where in = [10, 20, 30, 40, 50, 60, 70, 0]"
+       (execToOutWithIn exercise7 [10, 20, 30, 40, 50, 60, 70, 0])
+       (Just [Num 10, Num 30, Num 60, Num 100, Num 150, Num 210, Num 280])
+  test "exercise 7 where in = [0]"
+       (execToOutWithIn exercise7 [0])
+       (Just [])
+  test "exercise 7 where in = [-1]"
+       (execToOutWithIn exercise7 [-1])
+       (Just [])
+  test "exercise 7 where in = [1, 2, 3, 4, 5]" -- test there is no number from the input stream that is <= 0
+       (execToOutWithIn exercise7 [1, 2, 3, 4, 5])
+       Nothing
