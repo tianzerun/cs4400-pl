@@ -127,9 +127,13 @@ tests = do
   test "|- Let x True (Add 1 x) : Nothing"
        (typeOf empty (Let "x" (bool True) (Add (num 1) (Var "x"))))
        Nothing
+  -- | Sub and Mul
   test "|- 4 - 5 : TyInt"
        (typeOf empty (Sub (num 4) (num 5)))
        (Just TyInt)
+  test "|- 4 - False : Nothing"
+       (typeOf empty (Sub (num 4) (bool False)))
+       Nothing
   test "|- 4 * 5 : TyInt"
        (typeOf empty (Mul (num 4) (num 5)))
        (Just TyInt)
@@ -139,9 +143,17 @@ tests = do
   test "|- False * True : Nothing"
        (typeOf empty (Mul (bool False) (bool True)))
        Nothing
+  -- | And
   test "|- True && False : TyBool"
        (typeOf empty (And (bool True) (bool False)))
        (Just TyBool)
+  test "|- 1 && 2 : Nothing"
+       (typeOf empty (And (num 1) (num 2)))
+       Nothing
+  test "|- False && 1: Nothing"
+       (typeOf empty (And (bool False) (num 2)))
+       Nothing
+  -- | Not
   test "|- !True: TyBool"
        (typeOf empty (Not (bool True)))
        (Just TyBool)
@@ -151,9 +163,17 @@ tests = do
   test "|- !1: TyBool"
        (typeOf empty (Not (num 1)))
        Nothing
-  test "|- 0 < 2 : TyBool"
+  -- | Leq
+  test "|- 0 <= 2 : TyBool"
        (typeOf empty (Leq (num 0) (num 2)))
        (Just TyBool)
+  test "|- True <= False : Nothing"
+       (typeOf empty (Leq (bool True) (bool False)))
+       Nothing
+  test "|- 0 <= False : Nothing"
+       (typeOf empty (Leq (num 0) (bool False)))
+       Nothing
+  -- | If
   test "|- if True 1 2 : TyInt"
        (typeOf empty (If (bool True) (num 1) (num 2)))
        (Just TyInt)
@@ -163,6 +183,7 @@ tests = do
   test "|- if False 1 True : TyBool"
        (typeOf empty (If (bool False) (num 1) (bool True)))
        Nothing
+  -- | Pair, Fst, and Snd
   test "|- (1, True) : TyPair TyInt TyBool"
        (typeOf empty (Pair (num 1) (bool True)))
        (Just (TyPair TyInt TyBool))
@@ -196,6 +217,7 @@ tests = do
   test "|- Snd (1, !1) : Nothing"
        (typeOf empty (Snd (Pair (num 1) (Not (num 1)))))
        Nothing
+  -- | Nil and Cons
   test "|- int[] : TyList TyInt"
        (typeOf empty (Nil TyInt))
        (Just (TyList TyInt))
@@ -214,6 +236,7 @@ tests = do
   test "|- [(Lam x TyBool !x)] : Nothing" -- list element type does not match
        (typeOf empty (Cons (Lam "x" TyBool (Not (Var "x"))) (Nil (TyArrow TyInt TyBool))))
        Nothing
+  -- | Head
   test "|- Head (bool[]) : TyBool"
        (typeOf empty (Head (Nil TyBool)))
        (Just TyBool)
@@ -223,12 +246,14 @@ tests = do
   test "|- Head [1, 2] : TyInt"
        (typeOf empty (Head numList1))
        (Just TyInt)
+  -- | Tail
   test "|- Tail bool[] : TyList TyInt"
        (typeOf empty (Tail (Nil TyInt)))
        (Just (TyList TyInt))
   test "|- Tail False : Nothing"
        (typeOf empty (Tail (bool False)))
        Nothing
+  -- | IsNil
   test "|- IsNil bool[] : TyBool"
        (typeOf empty (IsNil (Nil TyBool)))
        (Just TyBool)

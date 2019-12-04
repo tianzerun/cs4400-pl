@@ -17,7 +17,7 @@ partners = (Just "Zhaohao Huang", Just "Zerun Tian")
 
 -- Please provide the total hours spent on this assignment
 hoursSpent :: (Int, Int)
-hoursSpent = (0, 0)
+hoursSpent = (5, 0)
 
 ---------------------------------------------------------------
 

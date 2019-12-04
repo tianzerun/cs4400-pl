@@ -124,6 +124,7 @@ expandArgs ((v, t) : l) body = Lam v t (expandArgs l body)
 ----------------------------------- TESTS -----------------------------------
 list1 = Cons (num 1) (Cons (num 2) (Cons (num 3) (Cons (num 4) (Nil TyInt))))
 list2 = Cons (bool True) (Cons (bool False) (Cons (bool False) (Nil TyBool)))
+list3 = Cons (num 1) (Cons (num 2) (Nil TyInt))
 
 tests :: IO ()
 tests = do
@@ -139,6 +140,7 @@ tests = do
   test "untypedButOk1 can be evaluated" (eval empty untypedButOk1) (Just (Bool False))
   test "untypedButOk2 can be evaluated" (eval empty untypedButOk2) (Just (Num 1))
   test "untypedButOk3 can be evaluated" (eval empty untypedButOk3) (Just (Num 1))
+  -- test cases for swapExpr
   test "|- swapExpr : swapExprType"
        (typeOf empty swapExpr)
        (Just swapExprType)
@@ -154,6 +156,7 @@ tests = do
   test "|- swapExpr (3, False) : Nothing"
        (typeOf empty (App swapExpr (Pair (num 3) (bool False))))
        Nothing
+  -- test cases for boolListLengthExpr
   test "|- boolListLengthExpr : boolListLengthExprType"
        (typeOf empty boolListLengthExpr)
        (Just boolListLengthExprType)
@@ -177,6 +180,7 @@ tests = do
                (App boolListLengthExpr
                     (Cons (num 1) (Cons (num 2) (Cons (num 3) (Nil TyInt))))))
        Nothing
+  -- test cases for zipIntExpr
   test "|- zipIntExpr : zipIntExprType"
        (typeOf empty zipIntExpr)
        (Just zipIntExprType)
@@ -196,3 +200,7 @@ tests = do
        (Just (VCons (VPair (Bool True) (Num 1))
                     (VCons (VPair (Bool False) (Num 2))
                            (VCons (VPair (Bool False) (Num 3)) VNil))))
+  test "eval zipIntExpr (list3 list2) => [(1, True), (2, False)]"
+       (eval empty (App zipIntExpr (Pair list3 list2)))
+       (Just (VCons (VPair (Num 1) (Bool True))
+                    (VCons (VPair (Num 2) (Bool False)) VNil)))
